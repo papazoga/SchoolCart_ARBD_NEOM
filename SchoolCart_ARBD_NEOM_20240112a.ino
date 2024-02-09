@@ -1,13 +1,23 @@
 #include <Adafruit_NeoMatrix.h>
 #include <Adafruit_NeoPixel.h>
 
+#define VOLT_PIN        A0
+#define AMPS_IN_PIN     A3      // labeled PLUSRAIL/PLUSOUT IC2
+#define AMPS_OUT_PIN    A2      // labeled MINUSRAIL/MINUSOUT IC3
 #define MATRIX01_PIN    11
 #define MATRIX02_PIN    12
 #define STRIP01_PIN     13
+
+#define VOLTCOEFF       13.36   // convert ADC value to voltage
+#define AMPS_IN_COEFF   13.05   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
+#define AMPS_IN_OFFSET  118.0   // when current sensor is at 0 amps this is the ADC value
+#define AMPS_OUT_COEFF  13.05   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
+#define AMPS_OUT_OFFSET 118.0   // when current sensor is at 0 amps this is the ADC value
+
 #define BRIGHTNESS      32
-#define mh              8
-#define mw              20
-#define STRIP_COUNT     60
+#define mh              8       // matrix height
+#define mw              20      // matrix width
+#define STRIP_COUNT     60      // how many LEDs
 
 Adafruit_NeoMatrix matrix02 =  Adafruit_NeoMatrix(mw, mh, MATRIX02_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoMatrix matrix01 =  Adafruit_NeoMatrix(mw, mh, MATRIX01_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
