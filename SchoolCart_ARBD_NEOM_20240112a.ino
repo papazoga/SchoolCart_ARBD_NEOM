@@ -4,15 +4,21 @@
 #define VOLT_PIN        A0
 #define AMPS_IN_PIN     A3      // labeled PLUSRAIL/PLUSOUT IC2
 #define AMPS_OUT_PIN    A2      // labeled MINUSRAIL/MINUSOUT IC3
+#define INVERTER_AMPS1_PIN     A4      // one of two current sensors for inverter
+#define INVERTER_AMPS2_PIN     A5      // two of two current sensors for inverter
 #define MATRIX01_PIN    11
 #define MATRIX02_PIN    12
 #define STRIP01_PIN     13
 
 #define VOLTCOEFF       13.36   // convert ADC value to voltage
-#define AMPS_IN_COEFF   13.05   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
-#define AMPS_IN_OFFSET  118.0   // when current sensor is at 0 amps this is the ADC value
-#define AMPS_OUT_COEFF  13.05   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
-#define AMPS_OUT_OFFSET 118.0   // when current sensor is at 0 amps this is the ADC value
+#define AMPS_IN_COEFF   11.94   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
+#define AMPS_IN_OFFSET  124.5   // when current sensor is at 0 amps this is the ADC value
+#define AMPS_OUT_COEFF  11.97   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
+#define AMPS_OUT_OFFSET 122.0   // when current sensor is at 0 amps this is the ADC value
+#define INVERTER_AMPS1_COEFF   12.30   // one of two current sensors for inverter
+#define INVERTER_AMPS1_OFFSET  119.5
+#define INVERTER_AMPS2_COEFF   12.63  // two of two current sensors for inverter
+#define INVERTER_AMPS2_OFFSET  120.5
 
 #define BRIGHTNESS      32
 #define mh              8       // matrix height
@@ -61,6 +67,10 @@ void loop() {
   disNeostring01(intAlignRigiht(V_Avg), LED_WHITE_HIGH);
   disNeostring02(intAlignRigiht(I_Avg), LED_WHITE_HIGH);
   disNeowipe(Wheel(80), P_Avg);
+  Serial.print("INVERTER_AMPS1_PIN ");
+  Serial.print(analogRead(INVERTER_AMPS1_PIN));
+  Serial.print(" INVERTER_AMPS2_PIN ");
+  Serial.print(analogRead(INVERTER_AMPS2_PIN));
   Serial.print(" V_Avg : ");
   Serial.print(V_Avg);
   Serial.print(" I_Avg : ");
