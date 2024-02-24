@@ -41,8 +41,18 @@ Adafruit_NeoPixel strip01(STRIP_COUNT, STRIP01_PIN, NEO_GRB + NEO_KHZ800);
 uint32_t V_Avg = 0;
 uint32_t I_Avg = 0;
 uint32_t P_Avg = 0;
+uint32_t inverter_amps1 = 0; // accumulator for inverter current sensor 1
+uint32_t inverter_amps2 = 0; // accumulator for inverter current sensor 2
+float voltage = 0;              // system DC voltage
+float current_pedal = 0;        // pedal input current
+float current_inverter;         // inverter output DC current
+float watts_pedal = 0;
+float watts_inverter = 0;
+float energy_pedal = 0;         // energy accumulators
+float energy_inverter = 0;      // energy accumulators
 
 uint16_t FAvgReads = 50;
+#define AVG_CYCLES 50 // how many times to average analog readings over
 
 void setup() {
   Serial.begin(115200);
@@ -60,23 +70,32 @@ void setup() {
 }
 
 void loop() {
-  V_Avg = constrain(map(((constrain(analogRead(A4),0,1023) + (V_Avg * (FAvgReads-1))) / FAvgReads), 0, 999, 0, 999),0,999);
-  I_Avg = constrain(map(((constrain(analogRead(A5),0,1023) + (I_Avg * (FAvgReads-1))) / FAvgReads), 0, 999, 0, 999),0,999);
-  P_Avg = map(((V_Avg/10)*(I_Avg/10))/10, 0, 949, 0, 60);
+  getAnalogs();
 
   disNeostring01(intAlignRigiht(V_Avg), LED_WHITE_HIGH);
   disNeostring02(intAlignRigiht(I_Avg), LED_WHITE_HIGH);
   disNeowipe(Wheel(80), P_Avg);
-  Serial.print("INVERTER_AMPS1_PIN ");
-  Serial.print(analogRead(INVERTER_AMPS1_PIN));
-  Serial.print(" INVERTER_AMPS2_PIN ");
-  Serial.print(analogRead(INVERTER_AMPS2_PIN));
-  Serial.print(" V_Avg : ");
-  Serial.print(V_Avg);
-  Serial.print(" I_Avg : ");
-  Serial.print(I_Avg);
-  Serial.print(" P_Avg : ");
-  Serial.println(P_Avg);
+  printInfo();
+}
+
+void printInfo() {
+  //Serial.print("INVERTER_AMPS1_PIN "+String(analogRead(INVERTER_AMPS1_PIN))+" INVERTER_AMPS2_PIN "+String(analogRead(INVERTER_AMPS2_PIN)));
+  Serial.println(String(analogRead(INVERTER_AMPS1_PIN))+"inverter_amps1:"+String(inverter_amps1)+"	"+String(analogRead(INVERTER_AMPS2_PIN))+"inverter_amps2:"+String(inverter_amps2)+"	Iout:"+String(current_inverter));
+}
+
+void getAnalogs() {
+  V_Avg = constrain(map(((constrain(analogRead(A4),0,1023) + (V_Avg * (FAvgReads-1))) / FAvgReads), 0, 999, 0, 999),0,999);
+  voltage=V_Avg; // TODO
+  I_Avg = constrain(map(((constrain(analogRead(A5),0,1023) + (I_Avg * (FAvgReads-1))) / FAvgReads), 0, 999, 0, 999),0,999);
+  P_Avg = map(((V_Avg/10)*(I_Avg/10))/10, 0, 949, 0, 60);
+  float inverter_amps1_calc = ( analogRead(INVERTER_AMPS1_PIN) - INVERTER_AMPS1_OFFSET ) / INVERTER_AMPS1_COEFF;
+  float inverter_amps2_calc = ( analogRead(INVERTER_AMPS2_PIN) - INVERTER_AMPS2_OFFSET ) / INVERTER_AMPS2_COEFF;
+  current_inverter = inverter_amps1_calc + inverter_amps2_calc;
+}
+
+float average(float val, float avg){
+  if (avg == 0) avg = val;
+  return (val + (avg * (AVG_CYCLES - 1))) / AVG_CYCLES;
 }
 
 String intAlignRigiht(int num) {
