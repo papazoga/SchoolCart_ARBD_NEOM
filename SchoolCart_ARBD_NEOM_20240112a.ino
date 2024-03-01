@@ -10,7 +10,7 @@
 #define MATRIX02_PIN    12
 #define STRIP01_PIN     13
 
-#define VOLTCOEFF       13.36   // convert ADC value to voltage
+#define VOLTCOEFF       13.13   // convert ADC value to voltage
 #define AMPS_IN_COEFF   11.94   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
 #define AMPS_IN_OFFSET  124.5   // when current sensor is at 0 amps this is the ADC value
 #define AMPS_OUT_COEFF  11.97   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
@@ -20,7 +20,7 @@
 #define INVERTER_AMPS2_COEFF   12.63  // two of two current sensors for inverter
 #define INVERTER_AMPS2_OFFSET  120.5
 
-#define BRIGHTNESS      32
+#define BRIGHTNESS      20
 #define mh              8       // matrix height
 #define mw              20      // matrix width
 #define STRIP_COUNT     60      // how many LEDs
@@ -35,23 +35,16 @@ Adafruit_NeoPixel strip01(STRIP_COUNT, STRIP01_PIN, NEO_GRB + NEO_KHZ800);
 #define LED_BLUE_HIGH 		31
 #define LED_WHITE_HIGH		(LED_RED_HIGH    + LED_GREEN_HIGH    + LED_BLUE_HIGH)
 
-//uint16_t V_Value = 0;
-//uint16_t I_Value = 0;
-//uint16_t P_Value = 0;
-uint32_t V_Avg = 0;
-uint32_t I_Avg = 0;
-uint32_t P_Avg = 0;
 uint32_t inverter_amps1 = 0; // accumulator for inverter current sensor 1
 uint32_t inverter_amps2 = 0; // accumulator for inverter current sensor 2
 float voltage = 0;              // system DC voltage
 float current_pedal = 0;        // pedal input current
-float current_inverter;         // inverter output DC current
+float current_inverter = 0;     // inverter output DC current
 float watts_pedal = 0;
 float watts_inverter = 0;
 float energy_pedal = 0;         // energy accumulators
 float energy_inverter = 0;      // energy accumulators
 
-uint16_t FAvgReads = 50;
 #define AVG_CYCLES 50 // how many times to average analog readings over
 
 void setup() {
@@ -72,25 +65,28 @@ void setup() {
 void loop() {
   getAnalogs();
 
-  disNeostring01(intAlignRigiht(V_Avg), LED_WHITE_HIGH);
-  disNeostring02(intAlignRigiht(I_Avg), LED_WHITE_HIGH);
-  disNeowipe(Wheel(80), P_Avg);
+  disNeostring01(intAlignRigiht(voltage), LED_WHITE_HIGH);
+  disNeostring02(intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
+  disNeowipe(Wheel(80), watts_inverter);
   printInfo();
+  delay(50);
 }
 
 void printInfo() {
-  //Serial.print("INVERTER_AMPS1_PIN "+String(analogRead(INVERTER_AMPS1_PIN))+" INVERTER_AMPS2_PIN "+String(analogRead(INVERTER_AMPS2_PIN)));
-  Serial.println(String(analogRead(INVERTER_AMPS1_PIN))+"inverter_amps1:"+String(inverter_amps1)+"	"+String(analogRead(INVERTER_AMPS2_PIN))+"inverter_amps2:"+String(inverter_amps2)+"	Iout:"+String(current_inverter));
+  Serial.println(String(analogRead(VOLT_PIN))+"	voltage:"+String(voltage)+
+      "	"+String(analogRead(AMPS_IN_PIN))+" amps_in:"+String(current_pedal)+
+      "	current_inverter: "+String(current_inverter));
 }
 
 void getAnalogs() {
-  V_Avg = constrain(map(((constrain(analogRead(A4),0,1023) + (V_Avg * (FAvgReads-1))) / FAvgReads), 0, 999, 0, 999),0,999);
-  voltage=V_Avg; // TODO
-  I_Avg = constrain(map(((constrain(analogRead(A5),0,1023) + (I_Avg * (FAvgReads-1))) / FAvgReads), 0, 999, 0, 999),0,999);
-  P_Avg = map(((V_Avg/10)*(I_Avg/10))/10, 0, 949, 0, 60);
+  voltage = average(analogRead(VOLT_PIN) / VOLTCOEFF, voltage);
+  current_pedal = average(( analogRead(AMPS_IN_PIN) - AMPS_IN_OFFSET ) / AMPS_IN_COEFF , current_pedal);
+  watts_pedal = voltage * current_pedal;
+
   float inverter_amps1_calc = ( analogRead(INVERTER_AMPS1_PIN) - INVERTER_AMPS1_OFFSET ) / INVERTER_AMPS1_COEFF;
   float inverter_amps2_calc = ( analogRead(INVERTER_AMPS2_PIN) - INVERTER_AMPS2_OFFSET ) / INVERTER_AMPS2_COEFF;
-  current_inverter = inverter_amps1_calc + inverter_amps2_calc;
+  current_inverter = average(inverter_amps1_calc + inverter_amps2_calc, current_inverter);
+  watts_inverter = voltage * current_inverter;
 }
 
 float average(float val, float avg){
