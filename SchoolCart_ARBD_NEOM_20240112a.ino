@@ -8,7 +8,13 @@
 #define INVERTER_AMPS2_PIN     A5      // two of two current sensors for inverter
 #define MATRIX01_PIN    11
 #define MATRIX02_PIN    12
-#define STRIP01_PIN     13
+#define PEDALOMETER_PIN     13
+#define BUTTONLEFT      6
+#define SWITCHMODE      7
+#define BUTTONRIGHT     8
+#define RELAY_OVERPEDAL  2 // this relay disconnects pedal power input when activated
+#define RELAY_INVERTERON 3 // this relay turns on the inverter by its own power switch
+#define RELAY_DROPSTOP   4 // this relay connects this arbduino to the battery power
 
 #define VOLTCOEFF       13.13   // convert ADC value to voltage
 #define AMPS_IN_COEFF   11.94   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
@@ -28,7 +34,7 @@
 
 Adafruit_NeoMatrix matrix02 =  Adafruit_NeoMatrix(mw, mh, MATRIX02_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoMatrix matrix01 =  Adafruit_NeoMatrix(mw, mh, MATRIX01_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel pedalometer(STRIP_COUNT, STRIP01_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pedalometer(STRIP_COUNT, PEDALOMETER_PIN, NEO_GRB + NEO_KHZ800);
 
 #define LED_BLACK		      0
 #define LED_RED_HIGH 		  (31 << 11)
@@ -50,7 +56,14 @@ float energy_inverter = 0;      // energy accumulators
 #define AVG_CYCLES 30 // how many times to average analog readings over
 
 void setup() {
+  pinMode(RELAY_DROPSTOP, OUTPUT);
+  digitalWrite(RELAY_DROPSTOP, HIGH); // turn on relay so we stay on until we decide otherwise
+  pinMode(RELAY_INVERTERON, OUTPUT);
+  pinMode(RELAY_OVERPEDAL, OUTPUT);
   Serial.begin(115200);
+  digitalWrite(BUTTONLEFT,HIGH);  // enable internal pull-up resistor
+  digitalWrite(SWITCHMODE,HIGH);  // enable internal pull-up resistor
+  digitalWrite(BUTTONRIGHT,HIGH); // enable internal pull-up resistor
   matrix01.begin();
   matrix01.setTextWrap(false);
   matrix01.setBrightness(BRIGHTNESS);
@@ -66,7 +79,17 @@ void setup() {
 
 void loop() {
   getAnalogs();
-  disNeostring01(intAlignRigiht(voltage), LED_WHITE_HIGH);
+  if (! digitalRead(BUTTONLEFT)) {
+    disNeostring01("LEFT", LED_WHITE_HIGH);
+    delay(1000);
+    if (! digitalRead(BUTTONLEFT)) digitalWrite(RELAY_DROPSTOP, LOW); // turn off
+  } else if (! digitalRead(BUTTONRIGHT)) {
+    disNeostring01("RIGHT", LED_WHITE_HIGH);
+  } else if (! digitalRead(SWITCHMODE)) {
+    disNeostring01("SWITCH", LED_WHITE_HIGH);
+  } else {
+    disNeostring01(intAlignRigiht(voltage), LED_WHITE_HIGH);
+  }
   disNeostring02(intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
   disNeowipePedalometer(Wheel(80), voltage*4);
   if (millis() - lastPrintInfo > INTERVAL_PRINT) {
