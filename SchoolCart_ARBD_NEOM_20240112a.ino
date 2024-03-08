@@ -20,6 +20,7 @@
 #define INVERTER_AMPS2_COEFF   12.63  // two of two current sensors for inverter
 #define INVERTER_AMPS2_OFFSET  120.5
 
+#define INTERVAL_PRINT  1000    // time between printInfo() events
 #define BRIGHTNESS      20
 #define mh              8       // matrix height
 #define mw              20      // matrix width
@@ -27,7 +28,7 @@
 
 Adafruit_NeoMatrix matrix02 =  Adafruit_NeoMatrix(mw, mh, MATRIX02_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoMatrix matrix01 =  Adafruit_NeoMatrix(mw, mh, MATRIX01_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel strip01(STRIP_COUNT, STRIP01_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pedalometer(STRIP_COUNT, STRIP01_PIN, NEO_GRB + NEO_KHZ800);
 
 #define LED_BLACK		      0
 #define LED_RED_HIGH 		  (31 << 11)
@@ -35,6 +36,7 @@ Adafruit_NeoPixel strip01(STRIP_COUNT, STRIP01_PIN, NEO_GRB + NEO_KHZ800);
 #define LED_BLUE_HIGH 		31
 #define LED_WHITE_HIGH		(LED_RED_HIGH    + LED_GREEN_HIGH    + LED_BLUE_HIGH)
 
+uint32_t lastPrintInfo = 0;  // last time printInfo() happened
 uint32_t inverter_amps1 = 0; // accumulator for inverter current sensor 1
 uint32_t inverter_amps2 = 0; // accumulator for inverter current sensor 2
 float voltage = 0;              // system DC voltage
@@ -45,7 +47,7 @@ float watts_inverter = 0;
 float energy_pedal = 0;         // energy accumulators
 float energy_inverter = 0;      // energy accumulators
 
-#define AVG_CYCLES 50 // how many times to average analog readings over
+#define AVG_CYCLES 30 // how many times to average analog readings over
 
 void setup() {
   Serial.begin(115200);
@@ -57,19 +59,20 @@ void setup() {
   matrix02.setTextWrap(false);
   matrix02.setBrightness(BRIGHTNESS);
   matrix02.clear();
-  strip01.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
-  strip01.show();            // Turn OFF all pixels ASAP
-  strip01.setBrightness(BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
+  pedalometer.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
+  pedalometer.show();            // Turn OFF all pixels ASAP
+  pedalometer.setBrightness(BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
 }
 
 void loop() {
   getAnalogs();
-
   disNeostring01(intAlignRigiht(voltage), LED_WHITE_HIGH);
   disNeostring02(intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
-  disNeowipe(Wheel(80), watts_inverter);
-  printInfo();
-  delay(50);
+  disNeowipePedalometer(Wheel(80), voltage*4);
+  if (millis() - lastPrintInfo > INTERVAL_PRINT) {
+    lastPrintInfo = millis();
+    printInfo();
+  }
 }
 
 void printInfo() {
@@ -131,15 +134,15 @@ void disNeostring02(String nval, uint32_t col) {
   matrix02.show();
 }
 
-void disNeowipe(uint32_t color, int pixlevel) {
+void disNeowipePedalometer(uint32_t color, int pixlevel) {
   if (pixlevel >= 60) {pixlevel = 59;}
-  for(int i=0; i<strip01.numPixels(); i++) { // For each pixel in strip...
-    if (i <= pixlevel) {strip01.setPixelColor(i, color);}
-    else {strip01.setPixelColor(i, 0);}         //  Set pixel's color (in RAM)
+  for(int i=0; i<pedalometer.numPixels(); i++) { // For each pixel in strip...
+    if (i <= pixlevel) {pedalometer.setPixelColor(i, color);}
+    else {pedalometer.setPixelColor(i, 0);}         //  Set pixel's color (in RAM)
     //strip.show();                          //  Update strip to match
     //delay(wait);                           //  Pause for a moment
   }
-  strip01.show();
+  pedalometer.show();
 }
 
 // Input a value 0 to 255 to get a color value.
@@ -147,12 +150,12 @@ void disNeowipe(uint32_t color, int pixlevel) {
 uint32_t Wheel(byte WheelPos) {
   WheelPos = 255 - WheelPos;
   if(WheelPos < 85) {
-   return strip01.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+   return pedalometer.Color(255 - WheelPos * 3, 0, WheelPos * 3);
   } else if(WheelPos < 170) {
     WheelPos -= 85;
-   return strip01.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+   return pedalometer.Color(0, WheelPos * 3, 255 - WheelPos * 3);
   } else {
    WheelPos -= 170;
-   return strip01.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+   return pedalometer.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
   }
 }
