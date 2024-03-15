@@ -28,12 +28,12 @@
 
 #define INTERVAL_PRINT  1000    // time between printInfo() events
 #define BRIGHTNESS      20
-#define mh              8       // matrix height
-#define mw              20      // matrix width
+#define MATRIX_HEIGHT   8       // matrix height
+#define MATRIX_WIDTH    28      // matrix width
 #define STRIP_COUNT     60      // how many LEDs
 
-Adafruit_NeoMatrix matrix02 =  Adafruit_NeoMatrix(mw, mh, MATRIX02_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoMatrix matrix01 =  Adafruit_NeoMatrix(mw, mh, MATRIX01_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoMatrix matrix02 =  Adafruit_NeoMatrix(MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX02_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoMatrix matrix01 =  Adafruit_NeoMatrix(MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX01_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel pedalometer(STRIP_COUNT, PEDALOMETER_PIN, NEO_GRB + NEO_KHZ800);
 
 #define LED_BLACK		      0
@@ -92,15 +92,17 @@ void loop() {
 
 void utilityModeLoop() {
   if (! digitalRead(BUTTONLEFT)) {
-    disNeostring01("LEFT", LED_WHITE_HIGH);
+    disNeostring(&matrix01,"LEFT", LED_WHITE_HIGH);
+    disNeostring(&matrix02,"LEFT", LED_WHITE_HIGH);
     delay(1000);
     if (! digitalRead(BUTTONLEFT)) digitalWrite(RELAY_DROPSTOP, LOW); // turn off
   } else if (! digitalRead(BUTTONRIGHT)) {
-    disNeostring01("RIGHT", LED_WHITE_HIGH);
+    disNeostring(&matrix01,"RIGHT", LED_WHITE_HIGH);
+    disNeostring(&matrix02,"RIGHT", LED_WHITE_HIGH);
   } else {
-    disNeostring01(intAlignRigiht(voltage*100), LED_WHITE_HIGH);
+    disNeostring(&matrix01,intAlignRigiht(voltage*100), LED_WHITE_HIGH);
+    disNeostring(&matrix02,intAlignRigiht(watts_pedal*100), LED_WHITE_HIGH);
   }
-  disNeostring02(intAlignRigiht(watts_pedal*100), LED_WHITE_HIGH);
   disNeowipePedalometer(Wheel(80), voltage*4);
 }
 
@@ -148,26 +150,14 @@ String intAlignRigiht(int num) {
   return spaces+String(num);
 }
 
-void disNeostring01(String nval, uint32_t col) {
-  int cursorPos = 0;
+void disNeostring(Adafruit_NeoMatrix* matrix, String nval, uint32_t col) { // https://forums.adafruit.com/viewtopic.php?t=101790
   //uint8_t dval = bval; //uint8_t dval = map(constrain(V_Value, 0, 1200), 0, 1200, 0, 255);
-  matrix01.clear();
-  matrix01.setCursor(3, 0);
-  matrix01.setTextColor(col);
-  matrix01.print(nval);
-  //matrix01->drawLine(24, 7, map(dval, 0, 255, 24, 0), 7, matrix01->Color(map(dval, 0, 255, 255, 150),dval,0));
-  matrix01.show();
-}
-
-void disNeostring02(String nval, uint32_t col) {
-  int cursorPos = 0;
-  //uint8_t dval = bval; //uint8_t dval = map(constrain(V_Value, 0, 1200), 0, 1200, 0, 255);
-  matrix02.clear();
-  matrix02.setCursor(3, 0);
-  matrix02.setTextColor(col);
-  matrix02.print(nval);
-  //matrix02->drawLine(24, 7, map(dval, 0, 255, 24, 0), 7, matrix02->Color(map(dval, 0, 255, 255, 150),dval,0));
-  matrix02.show();
+  matrix->clear();
+  matrix->setCursor(4, 0); // 3 allows 3 character, greater moves pixels to the right and allows fewer characters
+  matrix->setTextColor(col);
+  matrix->print(nval);
+  //matrix->drawLine(24, 7, map(dval, 0, 255, 24, 0), 7, matrix01->Color(map(dval, 0, 255, 255, 150),dval,0));
+  matrix->show();
 }
 
 void disNeowipePedalometer(uint32_t color, int pixlevel) {
