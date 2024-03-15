@@ -1,5 +1,6 @@
 #include <Adafruit_NeoMatrix.h>
 #include <Adafruit_NeoPixel.h>
+#include <EEPROM.h>
 
 #define VOLTAGE_PROTECT   28.5    // voltage at which pedallers are disconnected
 #define VOLTAGE_UNPROTECT 26.5    // voltage at which pedallers are re-connected
@@ -28,6 +29,7 @@ float amps_in_offset = 124.5;   // when current sensor is at 0 amps this is the 
 #define INVERTER_AMPS2_COEFF   12.63  // two of two current sensors for inverter
 #define INVERTER_AMPS2_OFFSET  120.5
 
+#define WATTHOURS_EEPROM_ADDRESS 20
 #define INTERVAL_PRINT  1000    // time between printInfo() events
 #define BRIGHTNESS      20
 #define MATRIX_HEIGHT   8       // matrix height
@@ -54,6 +56,7 @@ float watts_pedal = 0;
 float watts_inverter = 0;
 float energy_pedal = 0;         // energy accumulators
 float energy_inverter = 0;      // energy accumulators
+float energy_balance;           // energy banking account value, loaded from EEPROM
 
 #define AVG_CYCLES 30 // how many times to average analog readings over
 
@@ -77,6 +80,7 @@ void setup() {
   pedalometer.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   pedalometer.show();            // Turn OFF all pixels ASAP
   pedalometer.setBrightness(BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
+  load_energy_balance(); // load energy_balance from EEPROM
 }
 
 void loop() {
@@ -202,7 +206,38 @@ void doProtectionRelay() {
 }
 
 void attemptShutdown() {
+  if (switchInUtilityMode() == false) store_energy_balance(); // save our present energy bank account
   digitalWrite(RELAY_DROPSTOP, LOW); // turn off
   delay(2000);  // power will disappear by now
   digitalWrite(RELAY_DROPSTOP, HIGH); // if we're still on might as well own it
+}
+
+union float_and_byte { // https://www.tutorialspoint.com/cprogramming/c_unions
+  float f; // accessed as fab.f
+  unsigned char bs[sizeof(float)]; // accessed as fab.bs
+} fab; // a union is multiple vars taking up the same memory location
+
+void store_energy_balance() {
+  fab.f = energy_balance;
+  for( int i=0; i<sizeof(float); i++ )
+    EEPROM.write( WATTHOURS_EEPROM_ADDRESS+i, fab.bs[i] );
+}
+
+void load_energy_balance() {
+  Serial.print( "Loading watthours bytes 0x" );
+  bool blank = true;
+  for( int i=0; i<sizeof(float); i++ ) {
+    fab.bs[i] = EEPROM.read( WATTHOURS_EEPROM_ADDRESS+i );
+    Serial.print( fab.bs[i], HEX );
+    if( blank && fab.bs[i] != 0xff )  blank = false;
+  }
+  energy_balance = blank ? 0 : fab.f;
+  Serial.println( ", so energy_balance is "+String(energy_balance));
+}
+
+void reset_energy_balance() {
+  Serial.println("Zeroing energy_balance and storing to EEPROM");
+  energy_balance = 0;
+  store_energy_balance();
+  delay(1000); // otherwise it resets a million times each press
 }
