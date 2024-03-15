@@ -1,6 +1,8 @@
 #include <Adafruit_NeoMatrix.h>
 #include <Adafruit_NeoPixel.h>
 
+#define VOLTAGE_PROTECT   28.5    // voltage at which pedallers are disconnected
+#define VOLTAGE_UNPROTECT 26.5    // voltage at which pedallers are re-connected
 #define VOLT_PIN        A0
 #define AMPS_IN_PIN     A3      // labeled PLUSRAIL/PLUSOUT IC2
 #define AMPS_OUT_PIN    A2      // labeled MINUSRAIL/MINUSOUT IC3
@@ -79,6 +81,7 @@ void setup() {
 
 void loop() {
   getAnalogs();
+  doProtectionRelay(); // disconnect pedallers if necessary, shutoff inverter if necessary
   if (switchInUtilityMode()) {
     utilityModeLoop();
   } else {
@@ -95,7 +98,7 @@ void utilityModeLoop() {
     disNeostring(&matrix01,"LEFT", LED_WHITE_HIGH);
     disNeostring(&matrix02,"LEFT", LED_WHITE_HIGH);
     delay(1000);
-    if (! digitalRead(BUTTONLEFT)) digitalWrite(RELAY_DROPSTOP, LOW); // turn off
+    if (! digitalRead(BUTTONLEFT)) attemptShutdown();
   } else if (! digitalRead(BUTTONRIGHT)) {
     disNeostring(&matrix01,"RIGHT", LED_WHITE_HIGH);
     disNeostring(&matrix02,"RIGHT", LED_WHITE_HIGH);
@@ -187,4 +190,19 @@ uint32_t Wheel(byte WheelPos) {
    WheelPos -= 170;
    return pedalometer.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
   }
+}
+
+void doProtectionRelay() {
+  if (voltage > VOLTAGE_PROTECT) {
+    digitalWrite(RELAY_OVERPEDAL, HIGH); // disconnect pedallers
+  }
+  if (voltage < VOLTAGE_UNPROTECT) {
+    digitalWrite(RELAY_OVERPEDAL, LOW); // don't disconnect pedallers
+  }
+}
+
+void attemptShutdown() {
+  digitalWrite(RELAY_DROPSTOP, LOW); // turn off
+  delay(2000);  // power will disappear by now
+  digitalWrite(RELAY_DROPSTOP, HIGH); // if we're still on might as well own it
 }
