@@ -47,6 +47,7 @@ Adafruit_NeoPixel pedalometer(STRIP_COUNT, PEDALOMETER_PIN, NEO_GRB + NEO_KHZ800
 #define LED_WHITE_HIGH		(LED_RED_HIGH    + LED_GREEN_HIGH    + LED_BLUE_HIGH)
 
 uint32_t lastPrintInfo = 0;  // last time printInfo() happened
+uint32_t lastGetAnalogs = 0;  // last time getAnalogs() happened
 uint32_t inverter_amps1 = 0; // accumulator for inverter current sensor 1
 uint32_t inverter_amps2 = 0; // accumulator for inverter current sensor 2
 float voltage = 0;              // system DC voltage
@@ -81,10 +82,11 @@ void setup() {
   pedalometer.show();            // Turn OFF all pixels ASAP
   pedalometer.setBrightness(BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
   load_energy_balance(); // load energy_balance from EEPROM
+  lastGetAnalogs = millis(); // initialize integrator timer before first getAnalogs() call
 }
 
 void loop() {
-  getAnalogs();
+  getAnalogs(); // read voltages and currents, integrate energy counts
   doProtectionRelay(); // disconnect pedallers if necessary, shutoff inverter if necessary
   if (switchInUtilityMode()) {
     utilityModeLoop();
@@ -141,10 +143,13 @@ void printInfo() {
   // voltage = (millis() % 7200) / 1000.0 + 20.0; // TODO: take out this debugging feature
   Serial.println(String(analogRead(VOLT_PIN))+"	voltage:"+String(voltage)+
       "	"+String(analogRead(AMPS_IN_PIN))+" amps_in:"+String(current_pedal)+
-      "	current_inverter: "+String(current_inverter)+" SOC:"+String(estimateStateOfCharge()));
+      "	current_inverter: "+String(current_inverter)+" energy_pedal:"+String(energy_pedal)+" energy_inverter:"+String(energy_inverter));
 }
 
 void getAnalogs() {
+  uint32_t integrationTime = millis() - lastGetAnalogs; // time since last integration
+  lastGetAnalogs = millis();
+
   voltage = average(analogRead(VOLT_PIN) / VOLTCOEFF, voltage);
   int amps_in_pin_reading = analogRead(AMPS_IN_PIN);
   if (amps_in_pin_reading < amps_in_offset) amps_in_offset = amps_in_pin_reading; // update adc offset if negative
@@ -156,6 +161,9 @@ void getAnalogs() {
   float inverter_amps2_calc = ( analogRead(INVERTER_AMPS2_PIN) - INVERTER_AMPS2_OFFSET ) / INVERTER_AMPS2_COEFF;
   current_inverter = average(inverter_amps1_calc + inverter_amps2_calc, current_inverter);
   watts_inverter = voltage * current_inverter;
+
+  energy_pedal    += watts_pedal    * ( integrationTime / 1000.0 );
+  energy_inverter += watts_inverter * ( integrationTime / 1000.0 );
 }
 
 float average(float val, float avg){
