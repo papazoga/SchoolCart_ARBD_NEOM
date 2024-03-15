@@ -79,23 +79,36 @@ void setup() {
 
 void loop() {
   getAnalogs();
+  if (switchInUtilityMode()) {
+    utilityModeLoop();
+  } else {
+    energyBankingModeLoop();
+  }
+  if (millis() - lastPrintInfo > INTERVAL_PRINT) {
+    lastPrintInfo = millis();
+    printInfo();
+  }
+}
+
+void utilityModeLoop() {
   if (! digitalRead(BUTTONLEFT)) {
     disNeostring01("LEFT", LED_WHITE_HIGH);
     delay(1000);
     if (! digitalRead(BUTTONLEFT)) digitalWrite(RELAY_DROPSTOP, LOW); // turn off
   } else if (! digitalRead(BUTTONRIGHT)) {
     disNeostring01("RIGHT", LED_WHITE_HIGH);
-  } else if (! digitalRead(SWITCHMODE)) {
-    disNeostring01("SWITCH", LED_WHITE_HIGH);
   } else {
-    disNeostring01(intAlignRigiht(voltage), LED_WHITE_HIGH);
+    disNeostring01(intAlignRigiht(voltage*100), LED_WHITE_HIGH);
   }
-  disNeostring02(intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
+  disNeostring02(intAlignRigiht(watts_pedal*100), LED_WHITE_HIGH);
   disNeowipePedalometer(Wheel(80), voltage*4);
-  if (millis() - lastPrintInfo > INTERVAL_PRINT) {
-    lastPrintInfo = millis();
-    printInfo();
-  }
+}
+
+void energyBankingModeLoop() {
+}
+
+boolean switchInUtilityMode() { // LEFT is LOW/FALSE, RIGHT is HIGH/TRUE
+  return digitalRead(SWITCHMODE);
 }
 
 void printInfo() {
