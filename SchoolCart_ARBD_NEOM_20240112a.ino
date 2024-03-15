@@ -2,8 +2,8 @@
 #include <Adafruit_NeoPixel.h>
 #include <EEPROM.h>
 
-#define VOLTAGE_PROTECT   28.5    // voltage at which pedallers are disconnected
-#define VOLTAGE_UNPROTECT 26.5    // voltage at which pedallers are re-connected
+#define VOLTAGE_PROTECT   29.2 // if voltage > 29.2 open relay
+#define VOLTAGE_UNPROTECT 27.2 // if relay has been opened and  voltage is <=27.2, close relay
 #define VOLT_PIN        A0
 #define AMPS_IN_PIN     A3      // labeled PLUSRAIL/PLUSOUT IC2
 #define AMPS_OUT_PIN    A2      // labeled MINUSRAIL/MINUSOUT IC3
@@ -120,10 +120,28 @@ boolean switchInUtilityMode() { // LEFT is LOW/FALSE, RIGHT is HIGH/TRUE
   return digitalRead(SWITCHMODE);
 }
 
+int estimateStateOfCharge() { 
+  int soc = 0;
+  if (voltage >= 20.0)  soc =   0 +  (voltage - 20.0 ) * (10 / 4.0);  //  0,   20.0
+  if (voltage >= 24.0)  soc =  10 +  (voltage - 24.0 ) * (10 / 1.6);  //  10,  24.0
+  if (voltage >= 25.6)  soc =  20 +  (voltage - 25.6 ) * (10 / 0.2);  //  20,  25.6
+  if (voltage >= 25.8)  soc =  30 +  (voltage - 25.8 ) * (10 / 0.2);  //  30,  25.8
+  if (voltage >= 26.0)  soc =  40 +  (voltage - 26.0 ) * (10 / 0.2);  //  40,  26.0
+  if (voltage >= 26.2)  soc =  50 +  (voltage - 26.2 ) * (10 / 0.1);  //  50,  26.2
+  if (voltage >= 26.3)  soc =  60 +  (voltage - 26.3 ) * (10 / 0.05); //  60,  26.3
+  if (voltage >= 26.35) soc =  66 +  (voltage - 26.35) * (10 / 0.05); //  66,  26.35  
+  if (voltage >= 26.4)  soc =  70 +  (voltage - 26.4 ) * (10 / 0.2);  //  70,  26.4
+  if (voltage >= 26.6)  soc =  80 +  (voltage - 26.6 ) * (10 / 0.2);  //  80,  26.6
+  if (voltage >= 26.8)  soc =  90 +  (voltage - 26.8 ) * (10 / 0.4);  //  90,  26.8
+  if (voltage >= 27.2)  soc =  100;                                   //  100, 27.2 
+  return soc;
+}
+
 void printInfo() {
+  // voltage = (millis() % 7200) / 1000.0 + 20.0; // TODO: take out this debugging feature
   Serial.println(String(analogRead(VOLT_PIN))+"	voltage:"+String(voltage)+
       "	"+String(analogRead(AMPS_IN_PIN))+" amps_in:"+String(current_pedal)+
-      "	current_inverter: "+String(current_inverter));
+      "	current_inverter: "+String(current_inverter)+" SOC:"+String(estimateStateOfCharge()));
 }
 
 void getAnalogs() {
