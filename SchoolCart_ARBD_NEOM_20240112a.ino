@@ -18,7 +18,7 @@
 
 #define VOLTCOEFF       13.13   // convert ADC value to voltage
 #define AMPS_IN_COEFF   11.94   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
-#define AMPS_IN_OFFSET  124.5   // when current sensor is at 0 amps this is the ADC value
+float amps_in_offset = 124.5;   // when current sensor is at 0 amps this is the ADC value
 #define AMPS_OUT_COEFF  11.97   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
 #define AMPS_OUT_OFFSET 122.0   // when current sensor is at 0 amps this is the ADC value
 #define INVERTER_AMPS1_COEFF   12.30   // one of two current sensors for inverter
@@ -121,7 +121,10 @@ void printInfo() {
 
 void getAnalogs() {
   voltage = average(analogRead(VOLT_PIN) / VOLTCOEFF, voltage);
-  current_pedal = average(( analogRead(AMPS_IN_PIN) - AMPS_IN_OFFSET ) / AMPS_IN_COEFF , current_pedal);
+  int amps_in_pin_reading = analogRead(AMPS_IN_PIN);
+  if (amps_in_pin_reading < amps_in_offset) amps_in_offset = amps_in_pin_reading; // update adc offset if negative
+  if (amps_in_pin_reading - amps_in_offset < 6) amps_in_pin_reading = amps_in_offset; // zero current if near zero
+  current_pedal = average(( amps_in_pin_reading - amps_in_offset ) / AMPS_IN_COEFF , current_pedal);
   watts_pedal = voltage * current_pedal;
 
   float inverter_amps1_calc = ( analogRead(INVERTER_AMPS1_PIN) - INVERTER_AMPS1_OFFSET ) / INVERTER_AMPS1_COEFF;
