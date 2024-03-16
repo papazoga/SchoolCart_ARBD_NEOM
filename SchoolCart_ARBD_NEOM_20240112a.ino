@@ -23,11 +23,11 @@
 #define AMPS_IN_COEFF   11.94   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
 float amps_in_offset = 124.5;   // when current sensor is at 0 amps this is the ADC value
 #define AMPS_OUT_COEFF  11.97   // PLUSOUT = OUTPUT, PLUSRAIL = PEDAL INPUT
-#define AMPS_OUT_OFFSET 122.0   // when current sensor is at 0 amps this is the ADC value
+float amps_out_offset = 122.0;   // when current sensor is at 0 amps this is the ADC value
 #define INVERTER_AMPS1_COEFF   12.30   // one of two current sensors for inverter
-#define INVERTER_AMPS1_OFFSET  119.5
+float inverter_amps1_offset = 119.5;
 #define INVERTER_AMPS2_COEFF   12.63  // two of two current sensors for inverter
-#define INVERTER_AMPS2_OFFSET  120.5
+float inverter_amps2_offset = 120.5;
 
 #define WATTHOURS_EEPROM_ADDRESS 20
 #define INTERVAL_PRINT  1000    // time between printInfo() events
@@ -55,9 +55,9 @@ float current_pedal = 0;        // pedal input current
 float current_inverter = 0;     // inverter output DC current
 float watts_pedal = 0;
 float watts_inverter = 0;
-float energy_pedal = 0;         // energy accumulators
-float energy_inverter = 0;      // energy accumulators
-float energy_balance;           // energy banking account value, loaded from EEPROM
+uint32_t energy_pedal = 0;         // energy accumulators ALL IN MILLIJOULES
+uint32_t energy_inverter = 0;      // energy accumulators
+uint32_t energy_balance;           // energy banking account value, loaded from EEPROM
 
 #define AVG_CYCLES 30 // how many times to average analog readings over
 
@@ -86,7 +86,7 @@ void setup() {
 }
 
 void loop() {
-  getAnalogs(); // read voltages and currents, integrate energy counts
+  getAnalogs(); // read voltages and currents, integrate energy counts, calculate energy_balance
   doProtectionRelay(); // disconnect pedallers if necessary, shutoff inverter if necessary
   if (switchInUtilityMode()) {
     utilityModeLoop();
@@ -141,9 +141,13 @@ int estimateStateOfCharge() {
 
 void printInfo() {
   // voltage = (millis() % 7200) / 1000.0 + 20.0; // TODO: take out this debugging feature
-  Serial.println(String(analogRead(VOLT_PIN))+"	voltage:"+String(voltage)+
+  Serial.println(String(millis()/1000)+"	voltage:"+String(voltage)+
+      "	SOC:"+String(estimateStateOfCharge())+
       "	"+String(analogRead(AMPS_IN_PIN))+" amps_in:"+String(current_pedal)+
-      "	current_inverter: "+String(current_inverter)+" energy_pedal:"+String(energy_pedal)+" energy_inverter:"+String(energy_inverter));
+      "	current_inverter: "+String(current_inverter)+
+      " energy_pedal:"+String(energy_pedal/1000)+
+      " energy_inverter:"+String(energy_inverter/1000)+
+      " energy_balance:"+String(energy_balance/1000));
 }
 
 void getAnalogs() {
@@ -151,19 +155,31 @@ void getAnalogs() {
   lastGetAnalogs = millis();
 
   voltage = average(analogRead(VOLT_PIN) / VOLTCOEFF, voltage);
+
   int amps_in_pin_reading = analogRead(AMPS_IN_PIN);
-  if (amps_in_pin_reading < amps_in_offset) amps_in_offset = amps_in_pin_reading; // update adc offset if negative
-  if (amps_in_pin_reading - amps_in_offset < 6) amps_in_pin_reading = amps_in_offset; // zero current if near zero
   current_pedal = average(( amps_in_pin_reading - amps_in_offset ) / AMPS_IN_COEFF , current_pedal);
+  if (amps_in_pin_reading - amps_in_offset < 6) current_pedal = 0;
+  if (current_pedal < 0) current_pedal = 0;
   watts_pedal = voltage * current_pedal;
 
-  float inverter_amps1_calc = ( analogRead(INVERTER_AMPS1_PIN) - INVERTER_AMPS1_OFFSET ) / INVERTER_AMPS1_COEFF;
-  float inverter_amps2_calc = ( analogRead(INVERTER_AMPS2_PIN) - INVERTER_AMPS2_OFFSET ) / INVERTER_AMPS2_COEFF;
+  int inverter_amps1_pin_reading = analogRead(INVERTER_AMPS1_PIN);
+  float inverter_amps1_calc = ( inverter_amps1_pin_reading - inverter_amps1_offset ) / INVERTER_AMPS1_COEFF;
+  if (inverter_amps1_pin_reading - inverter_amps1_offset < 6) inverter_amps1_calc = 0;
+  if (inverter_amps1_calc < 0)     inverter_amps1_calc = 0;
+
+  int inverter_amps2_pin_reading = analogRead(INVERTER_AMPS2_PIN);
+  float inverter_amps2_calc = ( inverter_amps2_pin_reading - inverter_amps2_offset ) / INVERTER_AMPS2_COEFF;
+  if (inverter_amps2_pin_reading - inverter_amps2_offset < 6) inverter_amps2_calc = 0;
+  if (inverter_amps2_calc < 0)     inverter_amps2_calc = 0;
+
   current_inverter = average(inverter_amps1_calc + inverter_amps2_calc, current_inverter);
   watts_inverter = voltage * current_inverter;
 
-  energy_pedal    += watts_pedal    * ( integrationTime / 1000.0 );
-  energy_inverter += watts_inverter * ( integrationTime / 1000.0 );
+  energy_pedal    += watts_pedal    * integrationTime;
+  energy_inverter += watts_inverter * integrationTime;
+
+  energy_balance  += watts_pedal    * integrationTime; // adjust energy_balance
+  energy_balance  -= watts_inverter * integrationTime; // adjust energy_balance
 }
 
 float average(float val, float avg){
@@ -201,8 +217,6 @@ void disNeowipePedalometer(uint32_t color, int pixlevel) {
   for(int i=0; i<pedalometer.numPixels(); i++) { // For each pixel in strip...
     if (i <= pixlevel) {pedalometer.setPixelColor(i, color);}
     else {pedalometer.setPixelColor(i, 0);}         //  Set pixel's color (in RAM)
-    //strip.show();                          //  Update strip to match
-    //delay(wait);                           //  Pause for a moment
   }
   pedalometer.show();
 }
