@@ -29,12 +29,13 @@ float inverter_amps1_offset = 119.5;
 #define INVERTER_AMPS2_COEFF   12.63  // two of two current sensors for inverter
 float inverter_amps2_offset = 120.5;
 
-#define WATTHOURS_EEPROM_ADDRESS 20
 #define INTERVAL_PRINT  1000    // time between printInfo() events
+#define INTERVAL_NEOPIXELS 250  // time between neopixel update events WHICH CORRUPTS millis()
 #define BRIGHTNESS      20
 #define MATRIX_HEIGHT   8       // matrix height
 #define MATRIX_WIDTH    28      // matrix width
 #define STRIP_COUNT     60      // how many LEDs
+#define WATTHOURS_EEPROM_ADDRESS 20
 
 Adafruit_NeoMatrix matrix02 =  Adafruit_NeoMatrix(MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX02_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoMatrix matrix01 =  Adafruit_NeoMatrix(MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX01_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
@@ -47,6 +48,7 @@ Adafruit_NeoPixel pedalometer(STRIP_COUNT, PEDALOMETER_PIN, NEO_GRB + NEO_KHZ800
 #define LED_WHITE_HIGH		(LED_RED_HIGH    + LED_GREEN_HIGH    + LED_BLUE_HIGH)
 
 uint32_t lastPrintInfo = 0;  // last time printInfo() happened
+uint32_t lastNeopixels = 0;  // last time NeoPixels updated
 uint32_t lastGetAnalogs = 0;  // last time getAnalogs() happened
 uint32_t inverter_amps1 = 0; // accumulator for inverter current sensor 1
 uint32_t inverter_amps2 = 0; // accumulator for inverter current sensor 2
@@ -100,19 +102,28 @@ void loop() {
 }
 
 void utilityModeLoop() {
-  if (! digitalRead(BUTTONLEFT)) {
-    disNeostring(&matrix01,"LEFT", LED_WHITE_HIGH);
-    disNeostring(&matrix02,"LEFT", LED_WHITE_HIGH);
-    delay(1000);
-    if (! digitalRead(BUTTONLEFT)) attemptShutdown();
-  } else if (! digitalRead(BUTTONRIGHT)) {
-    disNeostring(&matrix01,"RIGHT", LED_WHITE_HIGH);
-    disNeostring(&matrix02,"RIGHT", LED_WHITE_HIGH);
-  } else {
-    disNeostring(&matrix01,intAlignRigiht(voltage*100), LED_WHITE_HIGH);
-    disNeostring(&matrix02,intAlignRigiht(watts_pedal*100), LED_WHITE_HIGH);
+  if (millis() - lastNeopixels > INTERVAL_NEOPIXELS) { // update neopixels at a reasonable rate
+    lastNeopixels = millis(); // reset interval
+    if (! digitalRead(BUTTONLEFT)) {
+      disNeostring(&matrix01,"LEFT", LED_WHITE_HIGH);
+      disNeostring(&matrix02,"LEFT", LED_WHITE_HIGH);
+      delay(500);
+      if (! digitalRead(BUTTONLEFT)) attemptShutdown(); // if button is still being held down, try to shut down
+    } else if (! digitalRead(BUTTONRIGHT)) {
+      disNeostring(&matrix01,"RIGHT", LED_WHITE_HIGH);
+      disNeostring(&matrix02,"RIGHT", LED_WHITE_HIGH);
+    } else {
+      disNeostring(&matrix01,intAlignRigiht(voltage*100), LED_WHITE_HIGH);
+      disNeostring(&matrix02,intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
+    }
+    int soc = estimateStateOfCharge();
+    disNeowipePedalometer(Wheel(80), (soc*60)/100); // 60 is max pedalometer
+    if (soc > 10) {
+      digitalWrite(RELAY_INVERTERON, HIGH); // turn on inverter
+    } else if (soc < 5) {
+      digitalWrite(RELAY_INVERTERON, LOW); // shut inverter OFF
+    }
   }
-  disNeowipePedalometer(Wheel(80), voltage*4);
 }
 
 void energyBankingModeLoop() {
@@ -247,7 +258,9 @@ void doProtectionRelay() {
 
 void attemptShutdown() {
   if (switchInUtilityMode() == false) store_energy_balance(); // save our present energy bank account
+  digitalWrite(RELAY_INVERTERON, LOW); // shut inverter OFF
   digitalWrite(RELAY_DROPSTOP, LOW); // turn off
+  while(digitalRead(BUTTONRIGHT)); // wait until unless right button is pressed (TODO)
   delay(2000);  // power will disappear by now
   digitalWrite(RELAY_DROPSTOP, HIGH); // if we're still on might as well own it
 }
