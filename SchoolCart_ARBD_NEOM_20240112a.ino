@@ -69,6 +69,7 @@ void setup() {
   pinMode(RELAY_INVERTERON, OUTPUT);
   pinMode(RELAY_OVERPEDAL, OUTPUT);
   Serial.begin(115200);
+  Serial.println("SchoolCart_ARBD_NEOM_20240112a.ino");
   digitalWrite(BUTTONLEFT,HIGH);  // enable internal pull-up resistor
   digitalWrite(SWITCHMODE,HIGH);  // enable internal pull-up resistor
   digitalWrite(BUTTONRIGHT,HIGH); // enable internal pull-up resistor
@@ -117,16 +118,71 @@ void utilityModeLoop() {
       disNeostring(&matrix02,intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
     }
     int soc = estimateStateOfCharge();
-    disNeowipePedalometer(Wheel(80), (soc*60)/100); // 60 is max pedalometer
     if (soc > 10) {
       digitalWrite(RELAY_INVERTERON, HIGH); // turn on inverter
     } else if (soc < 5) {
       digitalWrite(RELAY_INVERTERON, LOW); // shut inverter OFF
     }
+    soc = (millis() / 200) % 100; // TODO: this is for testing only
+    utilityModePedalometer(soc);
   }
 }
 
 void energyBankingModeLoop() {
+  if (millis() - lastNeopixels > INTERVAL_NEOPIXELS) { // update neopixels at a reasonable rate
+    lastNeopixels = millis(); // reset interval
+    if (! digitalRead(BUTTONLEFT)) {
+      disNeostring(&matrix01,"LEFT", LED_WHITE_HIGH);
+      disNeostring(&matrix02,"LEFT", LED_WHITE_HIGH);
+      delay(500);
+      if (! digitalRead(BUTTONLEFT)) attemptShutdown(); // if button is still being held down, try to shut down
+    } else if (! digitalRead(BUTTONRIGHT)) {
+      disNeostring(&matrix01,"RIGHT", LED_WHITE_HIGH);
+      disNeostring(&matrix02,"RIGHT", LED_WHITE_HIGH);
+    } else { //Show watts_pedal and energy_pedal on main signs.
+      disNeostring(&matrix01,intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
+      disNeostring(&matrix02,intAlignRigiht(energy_pedal), LED_WHITE_HIGH);
+    }
+    if (energy_balance > 600000) { //If we have just begun a new session, and energy_balance is <600, don't turn on inverter yet
+      digitalWrite(RELAY_INVERTERON, HIGH); // turn on inverter
+    } else if (energy_balance <= 0) {
+      digitalWrite(RELAY_INVERTERON, LOW); // shut inverter OFF
+    }
+    uint32_t energy_balance = (millis()*250000UL) % 3690000000UL; // TODO: this is for testing only
+    //Serial.println(energy_balance);
+    energyBankPedalometer(energy_balance/(    3600000000UL/59UL)); // 59 is max pedalometer, 60*60*1000000 is 1kwh
+    //Serial.println(energy_balance/(    3600000000UL/59UL));
+  }
+}
+
+void energyBankPedalometer(int pixlevel){
+  //Display energyBankBalance as a % of the available pixels, in green.
+  //If watts_pedal > watts_inverter then the pedalers are putting in more than
+  //the inverter. Show them things are heading higher. Do this by making the
+  //next 3 pixels up chase up on a 0.2s interval .  Else if watts_pedal <
+  //watts_inverter, the pedalers aren't keeping up. Show them things are
+  //heading lower.  Make the 3 pixels down chase down in red.
+  //If watt_pedals = watt_inverter, students are keeping up with the inverter.
+  //Show this with a 2 px chase up and chase down happening at the same time,
+  //in green.   OR JUST BLINK thE TOP LINE ON AND OFF
+  if (pixlevel >= 60) {pixlevel = 59;}
+  for(int i=0; i<pedalometer.numPixels(); i++) { // For each pixel in strip...
+    if (i <= pixlevel) {pedalometer.setPixelColor(i, pedalometer.Color(0,255,0));}
+    else {pedalometer.setPixelColor(i, 0);}         //  Set pixel's color to black
+  }
+  pedalometer.show();
+}
+
+void utilityModePedalometer(int soc){
+  //Display stateOfCharge as a %
+  // Light up a single ring. This pedalometer is not cumulative.
+  // for example, If state of charge is 50%, rather than turn on the bottom 30 rows, light up only the 30th row.
+  int pixlevel = soc * 59 / 100; // soc is 0-100, there are 60 pixels numbered 0-59
+  for(int i=0; i<pedalometer.numPixels(); i++) { //     color setting: RRRRRRRRRRRRRRRRR, GGGGGGGGGGGGGGGGG, Blue
+    if (i == pixlevel) {pedalometer.setPixelColor(i, pedalometer.Color(255 * (soc <= 15), 255 * (soc >= 15), 0));} //If state of charger is less than 15, make the ring red, otherwise it's green
+    else {pedalometer.setPixelColor(i, 0);}         //  Set pixel's color to black
+  }
+  pedalometer.show();
 }
 
 boolean switchInUtilityMode() { // LEFT is LOW/FALSE, RIGHT is HIGH/TRUE
@@ -191,6 +247,7 @@ void getAnalogs() {
 
   energy_balance  += watts_pedal    * integrationTime; // adjust energy_balance
   energy_balance  -= watts_inverter * integrationTime; // adjust energy_balance
+  if (energy_balance < 0) energy_balance = 0; // don't let it go negative, we don't do that
 }
 
 float average(float val, float avg){
@@ -221,30 +278,6 @@ void disNeostring(Adafruit_NeoMatrix* matrix, String nval, uint32_t col) { // ht
   matrix->print(nval);
   //matrix->drawLine(24, 7, map(dval, 0, 255, 24, 0), 7, matrix01->Color(map(dval, 0, 255, 255, 150),dval,0));
   matrix->show();
-}
-
-void disNeowipePedalometer(uint32_t color, int pixlevel) {
-  if (pixlevel >= 60) {pixlevel = 59;}
-  for(int i=0; i<pedalometer.numPixels(); i++) { // For each pixel in strip...
-    if (i <= pixlevel) {pedalometer.setPixelColor(i, color);}
-    else {pedalometer.setPixelColor(i, 0);}         //  Set pixel's color (in RAM)
-  }
-  pedalometer.show();
-}
-
-// Input a value 0 to 255 to get a color value.
-// The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
-  WheelPos = 255 - WheelPos;
-  if(WheelPos < 85) {
-   return pedalometer.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-  } else if(WheelPos < 170) {
-    WheelPos -= 85;
-   return pedalometer.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-  } else {
-   WheelPos -= 170;
-   return pedalometer.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-  }
 }
 
 void doProtectionRelay() {
