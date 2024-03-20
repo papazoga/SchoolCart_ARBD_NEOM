@@ -59,7 +59,7 @@ float watts_pedal = 0;
 float watts_inverter = 0;
 uint32_t energy_pedal = 0;         // energy accumulators ALL IN MILLIJOULES
 uint32_t energy_inverter = 0;      // energy accumulators
-uint32_t energy_balance;           // energy banking account value, loaded from EEPROM
+int32_t energy_balance;           // energy banking account value, loaded from EEPROM
 
 #define AVG_CYCLES 30 // how many times to average analog readings over
 
@@ -227,6 +227,9 @@ int estimateStateOfCharge() {
 
 void printInfo() {
   // voltage = (millis() % 7200) / 1000.0 + 20.0; // TODO: take out this debugging feature
+  if (digitalRead(RELAY_INVERTERON)) Serial.print("INV,");
+  if (digitalRead(RELAY_OVERPEDAL)) Serial.print("OVP,");
+  if (digitalRead(RELAY_DROPSTOP)) Serial.print("DSR,");
   Serial.println(String(millis()/1000)+"	voltage:"+String(voltage)+
       "	SOC:"+String(estimateStateOfCharge())+
       "	"+String(analogRead(AMPS_IN_PIN))+" amps_in:"+String(current_pedal)+
