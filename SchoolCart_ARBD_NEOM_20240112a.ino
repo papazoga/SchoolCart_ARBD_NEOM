@@ -30,7 +30,7 @@ float inverter_amps1_offset = 119.5;
 float inverter_amps2_offset = 120.5;
 
 #define INTERVAL_PRINT  1000    // time between printInfo() events
-#define INTERVAL_NEOPIXELS 250  // time between neopixel update events WHICH CORRUPTS millis()
+#define INTERVAL_NEOPIXELS 100  // time between neopixel update events WHICH CORRUPTS millis()
 #define BRIGHTNESS      20
 #define MATRIX_HEIGHT   8       // matrix height
 #define MATRIX_WIDTH    28      // matrix width
@@ -148,14 +148,17 @@ void energyBankingModeLoop() {
     } else if (energy_balance <= 0) {
       digitalWrite(RELAY_INVERTERON, LOW); // shut inverter OFF
     }
-    uint32_t energy_balance = (millis()*250000UL) % 3690000000UL; // TODO: this is for testing only
-    //Serial.println(energy_balance);
-    energyBankPedalometer(energy_balance/(    3600000000UL/59UL)); // 59 is max pedalometer, 60*60*1000000 is 1kwh
-    //Serial.println(energy_balance/(    3600000000UL/59UL));
+    //uint32_t energy_balance = (millis()*250000UL) % 3690000000UL; // TODO: this is for testing only
+    //uint32_t energy_balance = 3600000000UL/2; // TODO: this is for testing only
+    int trend = millis() % 9000 / 3000 - 1; // TODO: this is for testing only
+    if (watts_pedal >  (watts_inverter + 25))   trend = 1; // determine animation pattern on pedalometer
+    if (watts_pedal <= (watts_inverter + 25))   trend = 0;
+    if (watts_pedal < watts_inverter)           trend = -1;
+    energyBankPedalometer(energy_balance/(    3600000000UL/59UL), trend); // 59 is max pedalometer, 60*60*1000000 is 1kwh
   }
 }
 
-void energyBankPedalometer(int pixlevel){
+void energyBankPedalometer(int pixlevel, int trend){
   //Display energyBankBalance as a % of the available pixels, in green.
   //If watts_pedal > watts_inverter then the pedalers are putting in more than
   //the inverter. Show them things are heading higher. Do this by making the
@@ -169,6 +172,22 @@ void energyBankPedalometer(int pixlevel){
   for(int i=0; i<pedalometer.numPixels(); i++) { // For each pixel in strip...
     if (i <= pixlevel) {pedalometer.setPixelColor(i, pedalometer.Color(0,255,0));}
     else {pedalometer.setPixelColor(i, 0);}         //  Set pixel's color to black
+  }
+  int animationtime = millis() % 1000; // animation sequence counter
+  if (trend == 1) { // upward animation
+    if (animationtime > 750)                         pedalometer.setPixelColor(pixlevel + 3, pedalometer.Color(0,255,0));
+    if (animationtime > 500 && animationtime <= 750) pedalometer.setPixelColor(pixlevel + 2, pedalometer.Color(0,255,0));
+    if (animationtime > 250 && animationtime <= 500) pedalometer.setPixelColor(pixlevel + 1, pedalometer.Color(0,255,0));
+  }
+  if (trend == 0) { // in-place animation
+    if (animationtime > 750)                         pedalometer.setPixelColor(pixlevel, pedalometer.Color(0,170,0)); // two-thirds-bright
+    if (animationtime > 500 && animationtime <= 750) pedalometer.setPixelColor(pixlevel, pedalometer.Color(0,85,0)); // third-bright green
+    if (animationtime > 250 && animationtime <= 500) pedalometer.setPixelColor(pixlevel, pedalometer.Color(0,0,0));
+  }
+  if (trend == -1) { // downward animation in red
+    if (animationtime > 750)                         pedalometer.setPixelColor(pixlevel - 3, pedalometer.Color(255,0,0)); // red
+    if (animationtime > 500 && animationtime <= 750) pedalometer.setPixelColor(pixlevel - 2, pedalometer.Color(255,0,0)); // red
+    if (animationtime > 250 && animationtime <= 500) pedalometer.setPixelColor(pixlevel - 1, pedalometer.Color(255,0,0)); // red
   }
   pedalometer.show();
 }
