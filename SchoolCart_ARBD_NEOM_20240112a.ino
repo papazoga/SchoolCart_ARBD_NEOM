@@ -61,6 +61,25 @@ int32_t energy_balance;           // energy banking account value, loaded from E
 
 #define AVG_CYCLES 30 // how many times to average analog readings over
 
+void getAnalogs();
+void doProtectionRelay();
+boolean switchInUtilityMode();
+String intAlignRigiht(int num);
+float average(float val, float avg);
+void getAnalogs();void printInfo();
+int estimateStateOfCharge();
+boolean switchInUtilityMode();
+void utilityModePedalometer(int soc);
+void energyBankingModeLoop();
+void utilityModeLoop();
+void load_energy_balance();
+void disNeostring(Adafruit_NeoMatrix* matrix, String nval, uint32_t col);
+void attemptShutdown();
+void energyBankPedalometer();
+void attemptShutdown();
+void energyBankPedalometer(int pixlevel, int trend);
+void store_energy_balance();
+
 void setup() {
   pinMode(RELAY_DROPSTOP, OUTPUT);
   digitalWrite(RELAY_DROPSTOP, HIGH); // turn on relay so we stay on until we decide otherwise
