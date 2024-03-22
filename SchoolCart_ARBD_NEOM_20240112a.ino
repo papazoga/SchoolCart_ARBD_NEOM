@@ -9,8 +9,7 @@
 #define AMPS_OUT_PIN    A2      // labeled MINUSRAIL/MINUSOUT IC3
 #define INVERTER_AMPS1_PIN     A4      // one of two current sensors for inverter
 #define INVERTER_AMPS2_PIN     A5      // two of two current sensors for inverter
-#define MATRIX01_PIN    11
-#define MATRIX02_PIN    12
+#define MATRIX_PIN      11
 #define PEDALOMETER_PIN     13
 #define BUTTONLEFT      6
 #define SWITCHMODE      7
@@ -33,12 +32,11 @@ float inverter_amps2_offset = 120.5;
 #define INTERVAL_NEOPIXELS 100  // time between neopixel update events WHICH CORRUPTS millis()
 #define BRIGHTNESS      20
 #define MATRIX_HEIGHT   8       // matrix height
-#define MATRIX_WIDTH    28      // matrix width
+#define MATRIX_WIDTH    36      // matrix width THIS ONLY WORKS WITH v1.2.2 OF ADAFRUIT GFX LIBRARY
 #define STRIP_COUNT     60      // how many LEDs
 #define WATTHOURS_EEPROM_ADDRESS 20
 
-Adafruit_NeoMatrix matrix02 =  Adafruit_NeoMatrix(MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX02_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoMatrix matrix01 =  Adafruit_NeoMatrix(MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX01_PIN,  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoMatrix matrix(MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_PIN,  NEO_MATRIX_TOP + NEO_MATRIX_LEFT + NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel pedalometer(STRIP_COUNT, PEDALOMETER_PIN, NEO_GRB + NEO_KHZ800);
 
 #define LED_BLACK		      0
@@ -73,14 +71,16 @@ void setup() {
   digitalWrite(BUTTONLEFT,HIGH);  // enable internal pull-up resistor
   digitalWrite(SWITCHMODE,HIGH);  // enable internal pull-up resistor
   digitalWrite(BUTTONRIGHT,HIGH); // enable internal pull-up resistor
-  matrix01.begin();
-  matrix01.setTextWrap(false);
-  matrix01.setBrightness(BRIGHTNESS);
-  matrix01.clear();
-  matrix02.begin();
-  matrix02.setTextWrap(false);
-  matrix02.setBrightness(BRIGHTNESS);
-  matrix02.clear();
+  matrix.begin();
+  matrix.setTextWrap(false);
+  matrix.setBrightness(BRIGHTNESS);
+  matrix.clear();
+  matrix.setCursor(0, 0); // 3 allows 3 character, greater moves pixels to the right and allows fewer characters
+  matrix.setTextColor(LED_BLUE_HIGH);
+  matrix.print("mx0102mx");
+  matrix.show();
+
+  delay(2000);
   pedalometer.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   pedalometer.show();            // Turn OFF all pixels ASAP
   pedalometer.setBrightness(BRIGHTNESS); // Set BRIGHTNESS to about 1/5 (max = 255)
@@ -106,16 +106,14 @@ void utilityModeLoop() {
   if (millis() - lastNeopixels > INTERVAL_NEOPIXELS) { // update neopixels at a reasonable rate
     lastNeopixels = millis(); // reset interval
     if (! digitalRead(BUTTONLEFT)) {
-      disNeostring(&matrix01,"LEFT", LED_WHITE_HIGH);
-      disNeostring(&matrix02,"LEFT", LED_WHITE_HIGH);
+      disNeostring(&matrix,"LEFlef", LED_WHITE_HIGH);
       delay(500);
       if (! digitalRead(BUTTONLEFT)) attemptShutdown(); // if button is still being held down, try to shut down
     } else if (! digitalRead(BUTTONRIGHT)) {
-      disNeostring(&matrix01,"RIGHT", LED_WHITE_HIGH);
-      disNeostring(&matrix02,"RIGHT", LED_WHITE_HIGH);
+      disNeostring(&matrix,"RIGrig", LED_WHITE_HIGH);
     } else {
-      disNeostring(&matrix01,intAlignRigiht(voltage*100), LED_WHITE_HIGH);
-      disNeostring(&matrix02,intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
+      //disNeostring(&matrix,intAlignRigiht(voltage*100)+intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
+      disNeostring(&matrix,intAlignRigiht(millis()%1000)+intAlignRigiht(millis()%1000), LED_WHITE_HIGH);
     }
     int soc = estimateStateOfCharge();
     if (soc > 10) {
@@ -132,16 +130,13 @@ void energyBankingModeLoop() {
   if (millis() - lastNeopixels > INTERVAL_NEOPIXELS) { // update neopixels at a reasonable rate
     lastNeopixels = millis(); // reset interval
     if (! digitalRead(BUTTONLEFT)) {
-      disNeostring(&matrix01,"LEFT", LED_WHITE_HIGH);
-      disNeostring(&matrix02,"LEFT", LED_WHITE_HIGH);
+      disNeostring(&matrix,"LEFTleft", LED_WHITE_HIGH);
       delay(500);
       if (! digitalRead(BUTTONLEFT)) attemptShutdown(); // if button is still being held down, try to shut down
     } else if (! digitalRead(BUTTONRIGHT)) {
-      disNeostring(&matrix01,"RIGHT", LED_WHITE_HIGH);
-      disNeostring(&matrix02,"RIGHT", LED_WHITE_HIGH);
+      disNeostring(&matrix,"RIGHrigh", LED_WHITE_HIGH);
     } else { //Show watts_pedal and energy_pedal on main signs.
-      disNeostring(&matrix01,intAlignRigiht(watts_pedal), LED_WHITE_HIGH);
-      disNeostring(&matrix02,intAlignRigiht(energy_pedal), LED_WHITE_HIGH);
+      disNeostring(&matrix,intAlignRigiht(watts_pedal)+intAlignRigiht(energy_pedal), LED_WHITE_HIGH);
     }
     if (energy_balance > 600000) { //If we have just begun a new session, and energy_balance is <600, don't turn on inverter yet
       digitalWrite(RELAY_INVERTERON, HIGH); // turn on inverter
@@ -295,7 +290,7 @@ String intAlignRigiht(int num) {
 void disNeostring(Adafruit_NeoMatrix* matrix, String nval, uint32_t col) { // https://forums.adafruit.com/viewtopic.php?t=101790
   //uint8_t dval = bval; //uint8_t dval = map(constrain(V_Value, 0, 1200), 0, 1200, 0, 255);
   matrix->clear();
-  matrix->setCursor(4, 0); // 3 allows 3 character, greater moves pixels to the right and allows fewer characters
+  matrix->setCursor(0, 0); // 3 allows 3 character, greater moves pixels to the right and allows fewer characters
   matrix->setTextColor(col);
   matrix->print(nval);
   //matrix->drawLine(24, 7, map(dval, 0, 255, 24, 0), 7, matrix01->Color(map(dval, 0, 255, 255, 150),dval,0));
